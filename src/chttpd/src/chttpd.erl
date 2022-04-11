@@ -1114,6 +1114,8 @@ error_info(all_workers_died) ->
         "Nodes are unable to service this "
         "request due to overloading or maintenance mode."
     >>};
+error_info({internal_server_error, Reason}) ->
+    {500, <<"internal server error">>, Reason};
 error_info(not_implemented) ->
     {501, <<"not_implemented">>, <<"this feature is not yet implemented">>};
 error_info(timeout) ->
