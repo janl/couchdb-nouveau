@@ -90,8 +90,15 @@ handle_message(Else, _Shard, State) ->
     {error, Else}.
 
 
-merge_hits(Hits0, Hits1, Limit) ->
-    Hits0.
+merge_hits(HitsA, HitsB, Limit) ->
+    MergedHits = lists:merge(fun compare_hit/2, HitsA, HitsB),
+    lists:sublist(MergedHits, Limit).
+
+
+compare_hit({HitA}, {HitB}) ->
+    OrderA = couch_util:get_value(<<"order">>, HitA),
+    OrderB = couch_util:get_value(<<"order">>, HitB),
+    couch_ejson_compare:less(OrderA, OrderB).
 
 %% copied from dreyfus_index.erl
 design_doc_to_index(#doc{id = Id, body = {Fields}}, IndexName) ->
