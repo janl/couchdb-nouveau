@@ -105,7 +105,7 @@ open_or_create_index(#index{} = Index) ->
     case get_update_seq(Index) of
         {ok, UpdateSeq} ->
             {ok, UpdateSeq};
-        {error, not_found} ->
+        {error, {not_found, _}} ->
             case nouveau_api:create_index(index_name(Index), index_definition(Index)) of
                 ok ->
                     {ok, 0};

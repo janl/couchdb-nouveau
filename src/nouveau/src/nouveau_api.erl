@@ -145,22 +145,19 @@ nouveau_url() ->
 
 
 jaxrs_error("400", Body) ->
-    {Fields} = jiffy:decode(Body),
-    Message = couch_util:get_value(<<"message">>, Fields),
-    {bad_request, Message};
+    {bad_request, message(Body)};
 
-jaxrs_error("404", _Body) ->
-    not_found;
+jaxrs_error("404", Body) ->
+    {not_found, message(Body)};
+
+jaxrs_error("405", Body) ->
+    {method_not_allowed, message(Body)};
 
 jaxrs_error("422", Body) ->
-    {Fields} = jiffy:decode(Body),
-    Errors = couch_util:get_value(<<"errors">>, Fields),
-    {bad_request, lists:join(" and ", Errors)};
+    {bad_request, lists:join(" and ", errors(Body))};
 
 jaxrs_error("500", Body) ->
-    {Fields} = jiffy:decode(Body),
-    Message = couch_util:get_value(<<"message">>, Fields),
-    {internal_server_error, Message}.
+    {internal_server_error, message(Body)}.
 
 
 send_error({conn_failed, _}) ->
@@ -168,3 +165,13 @@ send_error({conn_failed, _}) ->
 
 send_error(Reason) ->
     {error, Reason}.
+
+
+message(Body) ->
+    {Fields} = jiffy:decode(Body),
+    couch_util:get_value(<<"message">>, Fields).
+
+
+errors(Body) ->
+    {Fields} = jiffy:decode(Body),
+    couch_util:get_value(<<"errors">>, Fields).
