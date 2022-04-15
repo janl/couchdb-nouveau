@@ -63,5 +63,4 @@ handle_info_req(_Req, _Db, _DDoc) ->
 
 
 convert_hit(Hit) ->
-    couch_log:notice("OOH ~p", [Hit]),
     Hit.
