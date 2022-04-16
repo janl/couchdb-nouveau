@@ -113,7 +113,11 @@ update_doc(IndexName, DocId, UpdateSeq, Fields)
 
 search(IndexName, #query_args{} = QueryArgs)
   when is_binary(IndexName), is_binary(QueryArgs#query_args.query), is_integer(QueryArgs#query_args.limit) ->
-    ReqBody = {[{<<"query">>, QueryArgs#query_args.query}, {<<"limit">>, QueryArgs#query_args.limit}]},
+    ReqBody = {[
+        {<<"query">>, QueryArgs#query_args.query},
+        {<<"limit">>, QueryArgs#query_args.limit},
+        {<<"sort">>, QueryArgs#query_args.sort}
+    ]},
     Resp = ibrowse:send_req(search_url(IndexName), [?JSON_CONTENT_TYPE], post, jiffy:encode(ReqBody)),
     case Resp of
         {ok, "200", _, RespBody} ->

@@ -46,7 +46,8 @@ handle_search_req(#httpd{method = 'GET', path_parts = [_, _, _, _, IndexName]} =
     DbName = couch_db:name(Db),
     Query = ?l2b(chttpd:qs_value(Req, "q")),
     Limit = list_to_integer(chttpd:qs_value(Req, "limit", "25")),
-    QueryArgs = #query_args{query = Query, limit = Limit},
+    Sort = ?JSON_DECODE(chttpd:qs_value(Req, "sort", "null")),
+    QueryArgs = #query_args{query = Query, limit = Limit, sort = Sort},
     case nouveau_fabric_search:go(DbName, DDoc, IndexName, QueryArgs) of
         {ok, #top_docs{} = TopDocs} ->
             RespBody = {[
