@@ -98,7 +98,7 @@ merge_hits(HitsA, HitsB, Limit) ->
 compare_hit({HitA}, {HitB}) ->
     OrderA = couch_util:get_value(<<"order">>, HitA),
     OrderB = couch_util:get_value(<<"order">>, HitB),
-    couch_ejson_compare:less(OrderA, OrderB).
+    couch_ejson_compare:less(OrderA, OrderB) < 1.
 
 %% copied from dreyfus_index.erl
 design_doc_to_index(#doc{id = Id, body = {Fields}}, IndexName) ->
