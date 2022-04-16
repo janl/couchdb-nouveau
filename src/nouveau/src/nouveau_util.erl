@@ -21,5 +21,5 @@
 -export([index_name/1]).
 
 index_name(#index{} = Index) ->
-    <<(Index#index.dbname)/binary, "/", (Index#index.sig)/binary>>.
-
+    NodeBin = atom_to_binary(node(), utf8),
+    <<NodeBin/binary, "/", (Index#index.dbname)/binary, "/", (Index#index.sig)/binary>>.
