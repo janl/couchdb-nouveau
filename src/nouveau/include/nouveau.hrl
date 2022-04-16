@@ -24,7 +24,8 @@
 
 -record(query_args, {
     query,
-    limit
+    limit,
+    sort
 }).
 
 
