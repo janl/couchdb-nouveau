@@ -37,7 +37,7 @@
 ]).
 
 -define(BY_DBSIG, nouveau_by_dbsig).
--define(BY_PID, nouveau_by_pid).
+-define(BY_REF, nouveau_by_ref).
 
 
 start_link() ->
@@ -51,8 +51,7 @@ update_index(#index{} = Index) ->
 init(_) ->
     couch_util:set_mqd_off_heap(?MODULE),
     ets:new(?BY_DBSIG, [set, named_table]),
-    ets:new(?BY_PID, [set, named_table]),
-    process_flag(trap_exit, true),
+    ets:new(?BY_REF, [set, named_table]),
     {ok, nil}.
 
 
@@ -60,10 +59,10 @@ handle_call({update, #index{} = Index0}, From, State) ->
     DbSig = {Index0#index.dbname, Index0#index.sig},
     case ets:lookup(?BY_DBSIG, DbSig) of
         [] ->
-            IndexerPid = nouveau_index_updater:start_link(Index0),
+            {ok, IndexerRef} = nouveau_index_updater:start_monitor(Index0),
             Queue = queue:in(From, queue:new()),
             true = ets:insert(?BY_DBSIG, {DbSig, Index0, Queue}),
-            true = ets:insert(?BY_PID, {IndexerPid, DbSig});
+            true = ets:insert(?BY_REF, {IndexerRef, DbSig});
         [{_DbSig, Index1, Queue}] ->
             ets:insert(?BY_DBSIG, {DbSig, Index1, queue:in(From, Queue)})
     end,
@@ -77,12 +76,12 @@ handle_cast(_Msg, State) ->
     {noreply, State}.
 
 
-handle_info({'EXIT', IndexerPid, _Reason}, State) ->
-    case ets:lookup(?BY_PID, IndexerPid) of
+handle_info({'DOWN', IndexerRef, process, _Pid, Reason}, State) ->
+    case ets:lookup(?BY_REF, IndexerRef) of
         [] ->
             {noreply, State}; % not one of ours, somehow...
         [{_, DbSig}] ->
-            true = ets:delete(?BY_PID, IndexerPid),
+            true = ets:delete(?BY_REF, IndexerRef),
             [{_, Index, Queue0}] = ets:lookup(?BY_DBSIG, DbSig),
             {{value, From}, Queue1} = queue:out(Queue0),
             gen_server:reply(From, ok),
@@ -90,9 +89,9 @@ handle_info({'EXIT', IndexerPid, _Reason}, State) ->
                 true ->
                     true = ets:delete(?BY_DBSIG, DbSig);
                 false ->
-                    NewIndexerPid = nouveau_index_updater:start_link(Index),
+                    NewIndexerRef = nouveau_index_updater:start_monitor(Index),
                     true = ets:insert(?BY_DBSIG, {DbSig, Index, Queue1}),
-                    true = ets:insert(?BY_PID, {NewIndexerPid, DbSig})
+                    true = ets:insert(?BY_REF, {NewIndexerRef, DbSig})
             end,
             {noreply, State}
     end;
