@@ -22,7 +22,7 @@
 -export([outdated/1]).
 
 %% callbacks
--export([start_monitor/1, update/1]).
+-export([update/1]).
 
 -import(couch_query_servers, [get_os_process/1, ret_os_process/1, proc_prompt/2]).
 -import(nouveau_util, [index_name/1]).
@@ -30,19 +30,13 @@
 outdated(#index{} = Index) ->
     case open_or_create_index(Index) of
         {ok, CurSeq} ->
-            couch_log:notice("outdated ~p", [CurSeq]),
             get_update_seq(Index) > CurSeq;
         {error, Reason} ->
             {error, Reason}
     end.
 
 
-start_monitor(#index{} = Index) ->
-    proc_lib:start_monitor(?MODULE, update, [Index]).
-
-
 update(#index{} = Index) ->
-    proc_lib:init_ack(ok),
     {ok, Db} = couch_db:open_int(Index#index.dbname, []),
     try
         case open_or_create_index(Index) of
@@ -70,8 +64,7 @@ update(#index{} = Index) ->
                     {ok, _} = couch_db:fold_changes(Db, CurSeq, fun load_docs/2, Acc0, [])
                 after
                     ret_os_process(Proc)
-                end,
-                exit(normal)
+                end
         end
     after
         couch_db:close(Db)
