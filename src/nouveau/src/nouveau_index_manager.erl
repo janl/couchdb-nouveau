@@ -59,7 +59,7 @@ handle_call({update, #index{} = Index0}, From, State) ->
     DbSig = {Index0#index.dbname, Index0#index.sig},
     case ets:lookup(?BY_DBSIG, DbSig) of
         [] ->
-            {ok, IndexerRef} = nouveau_index_updater:start_monitor(Index0),
+            {_IndexerPid, IndexerRef} = spawn_monitor(nouveau_index_updater, update, [Index0]),
             Queue = queue:in(From, queue:new()),
             true = ets:insert(?BY_DBSIG, {DbSig, Index0, Queue}),
             true = ets:insert(?BY_REF, {IndexerRef, DbSig});
