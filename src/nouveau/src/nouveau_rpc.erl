@@ -26,7 +26,10 @@ search(DbName, #index{} = Index0, #query_args{} = QueryArgs) ->
     Index1 = Index0#index{dbname = DbName},
 
     %% skip this when we add stale=ok
-    ok = nouveau_index_manager:update_index(Index1),
-
-    %% Run the search
-    rexi:reply(nouveau_api:search(index_name(Index1), QueryArgs)).
+    case nouveau_index_manager:update_index(Index1) of
+        ok ->
+            %% Run the search
+            rexi:reply(nouveau_api:search(index_name(Index1), QueryArgs));
+        {error, Reason} ->
+            rexi:reply({error, Reason})
+    end.
