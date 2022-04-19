@@ -87,8 +87,10 @@ handle_info({'DOWN', IndexerRef, process, _Pid, Reason}, State) ->
             case Reason of
                 normal ->
                     gen_server:reply(From, ok);
-                _Other ->
-                    gen_server:reply(From, {error, indexing_failed})
+                Other ->
+                    couch_log:error("~p: db:~s ddoc:~s index:~s failed with: ~p",
+                        [?MODULE, mem3:dbname(Index#index.dbname), Index#index.ddoc_id, Index#index.name, Other]),
+                    gen_server:reply(From, {error, {internal_server_error, <<"indexing failed">>}})
             end,
             case queue:is_empty(Queue1) of
                 true ->
