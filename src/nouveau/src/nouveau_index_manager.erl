@@ -84,7 +84,12 @@ handle_info({'DOWN', IndexerRef, process, _Pid, Reason}, State) ->
             true = ets:delete(?BY_REF, IndexerRef),
             [{_, Index, Queue0}] = ets:lookup(?BY_DBSIG, DbSig),
             {{value, From}, Queue1} = queue:out(Queue0),
-            gen_server:reply(From, ok),
+            case Reason of
+                normal ->
+                    gen_server:reply(From, ok);
+                _Other ->
+                    gen_server:reply(From, {error, indexing_failed})
+            end,
             case queue:is_empty(Queue1) of
                 true ->
                     true = ets:delete(?BY_DBSIG, DbSig);
