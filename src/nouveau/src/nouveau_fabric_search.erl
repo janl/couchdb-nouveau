@@ -33,12 +33,18 @@ go(DbName, DDoc, IndexName, #query_args{} = QueryArgs) ->
     Shards = mem3:shards(DbName),
     Workers = fabric_util:submit_jobs(Shards, nouveau_rpc, search, [Index, QueryArgs]),
     Counters = fabric_dict:init(Workers, nil),
-    RexiMon = fabric_util:create_monitors(Workers),    State = #state{limit = QueryArgs#query_args.limit, counters = Counters, top_docs = #top_docs{}},
+    RexiMon = fabric_util:create_monitors(Workers),
+    State0 = #state{
+        limit = QueryArgs#query_args.limit,
+        counters = Counters,
+        top_docs = #top_docs{}
+    },
     try
-        rexi_utils:recv(Workers, #shard.ref, fun handle_message/3, State, infinity, 1000 * 60 * 60)
+        rexi_utils:recv(Workers, #shard.ref, fun handle_message/3, State0, infinity, 1000 * 60 * 60)
     of
-        {ok, Result} ->
-            {ok, Result};
+        {ok, #state{} = State1} ->
+            Bookmark = bookmark(QueryArgs#query_args.bookmark, State1#state.top_docs#top_docs.hits),
+            {ok, State1#state.top_docs, Bookmark};
         {error, Reason} ->
             {error, Reason}
     after
@@ -55,22 +61,24 @@ handle_message({ok, Response}, Shard, State) ->
         nil ->
             {Fields} = Response,
             TotalHits = couch_util:get_value(<<"total_hits">>, Fields),
-            Hits = couch_util:get_value(<<"hits">>, Fields),
+            Hits0 = couch_util:get_value(<<"hits">>, Fields),
+            Hits1 = [convert_hit(Shard, Hit) || Hit <- Hits0],
 
             TopDocs0 = State#state.top_docs,
             TopDocs1 = TopDocs0#top_docs{
                 total_hits = TotalHits + TopDocs0#top_docs.total_hits,
-                hits = merge_hits(Hits, TopDocs0#top_docs.hits, State#state.limit)
+                hits = merge_hits(Hits1, TopDocs0#top_docs.hits, State#state.limit)
             },
 
-            Counters1 = fabric_dict:store(Shard, ok, State#state.counters),
-            Counters2 = fabric_view:remove_overlapping_shards(Shard, Counters1),
-            State1 = State#state{counters = Counters2, top_docs = TopDocs1},
-            case fabric_dict:any(nil, Counters2) of
+            Counters0 = fabric_dict:store(Shard, ok, State#state.counters),
+            Counters1 = fabric_view:remove_overlapping_shards(Shard, Counters0),
+
+            State1 = State#state{counters = Counters1, top_docs = TopDocs1},
+            case fabric_dict:any(nil, Counters1) of
                 true ->
                     {ok, State1};
                 false ->
-                    {stop, TopDocs1}
+                    {stop, State1}
             end
     end;
 
@@ -83,11 +91,20 @@ handle_message({rexi_DOWN, _, {_, NodeRef}, _}, _Shard, State) ->
             {error, {nodedown, <<"progress not possible">>}}
     end;
 
-handle_message({error, Reason}, _Shard, State) ->
+handle_message({error, Reason}, _Shard, _State) ->
     {error, Reason};
 
-handle_message(Else, _Shard, State) ->
+handle_message(Else, _Shard, _State) ->
     {error, Else}.
+
+
+convert_hit(#shard{} = Shard, {Hit}) ->
+    #hit{
+        range = Shard#shard.range,
+        id = couch_util:get_value(<<"id">>, Hit),
+        order = couch_util:get_value(<<"order">>, Hit),
+        fields = couch_util:get_value(<<"fields">>, Hit)
+    }.
 
 
 merge_hits(HitsA, HitsB, Limit) ->
@@ -95,10 +112,17 @@ merge_hits(HitsA, HitsB, Limit) ->
     lists:sublist(MergedHits, Limit).
 
 
-compare_hit({HitA}, {HitB}) ->
-    OrderA = couch_util:get_value(<<"order">>, HitA),
-    OrderB = couch_util:get_value(<<"order">>, HitB),
-    couch_ejson_compare:less(OrderA, OrderB) < 1.
+compare_hit(#hit{} = HitA, #hit{} = HitB) ->
+    couch_ejson_compare:less(HitA#hit.order, HitB#hit.order) < 1.
+
+
+bookmark(Bookmark, Hits0) ->
+    Hits1 = maps:from_list([{range_string(Hit#hit.range), Hit#hit.order} || Hit <- Hits0]),
+    maps:merge(Bookmark, Hits1).
+
+range_string([Start, End]) ->
+    list_to_binary(io_lib:format("~.16b-~.16b", [Start, End])).
+
 
 %% copied from dreyfus_index.erl
 design_doc_to_index(#doc{id = Id, body = {Fields}}, IndexName) ->

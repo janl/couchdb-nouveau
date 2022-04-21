@@ -25,11 +25,20 @@
 -record(query_args, {
     query,
     limit,
-    sort
+    sort,
+    bookmark
 }).
 
 
 -record(top_docs, {
     total_hits = 0,
     hits = []
+}).
+
+
+-record(hit, {
+    range,
+    id,
+    order,
+    fields
 }).

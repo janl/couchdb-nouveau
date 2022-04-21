@@ -46,11 +46,13 @@ handle_search_req(#httpd{method = 'GET', path_parts = [_, _, _, _, IndexName]} =
     DbName = couch_db:name(Db),
     Query = ?l2b(chttpd:qs_value(Req, "q")),
     Limit = list_to_integer(chttpd:qs_value(Req, "limit", "25")),
-    Sort = ?JSON_DECODE(chttpd:qs_value(Req, "sort", "null")),
-    QueryArgs = #query_args{query = Query, limit = Limit, sort = Sort},
+    Sort = jiffy:decode(chttpd:qs_value(Req, "sort", "null")),
+    Bookmark0 = decode_bookmark(chttpd:qs_value(Req, "bookmark", "*")),
+    QueryArgs = #query_args{query = Query, limit = Limit, sort = Sort, bookmark = Bookmark0},
     case nouveau_fabric_search:go(DbName, DDoc, IndexName, QueryArgs) of
-        {ok, #top_docs{} = TopDocs} ->
+        {ok, #top_docs{} = TopDocs, Bookmark1} ->
             RespBody = {[
+                {<<"bookmark">>, encode_bookmark(Bookmark1)},
                 {<<"total_hits">>, TopDocs#top_docs.total_hits},
                 {<<"hits">>, [convert_hit(Hit) || Hit <- TopDocs#top_docs.hits]}
             ]},
@@ -63,5 +65,24 @@ handle_info_req(_Req, _Db, _DDoc) ->
     ok.
 
 
-convert_hit(Hit) ->
-    Hit.
+convert_hit(#hit{} = Hit) ->
+    {[
+        {<<"_id">>, Hit#hit.id},
+        {<<"_order">>, Hit#hit.order},
+        {<<"_fields">>, Hit#hit.fields}
+    ]}.
+
+%% bookmark is valid json from nouveau jvm side but
+%% lets compress it and make it opaque.
+encode_bookmark(Bookmark0) ->
+    Bookmark1 = jiffy:encode(Bookmark0),
+    Bookmark2 = zlib:compress(Bookmark1),
+    base64:encode(Bookmark2).
+
+decode_bookmark("*") ->
+    #{};
+
+decode_bookmark(Bookmark0) ->
+    Bookmark1 = base64:decode(Bookmark0),
+    Bookmark2 = zlib:uncompress(Bookmark1),
+    jiffy:decode(Bookmark2, [return_maps]).
