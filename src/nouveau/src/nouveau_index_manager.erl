@@ -96,7 +96,7 @@ handle_info({'DOWN', IndexerRef, process, _Pid, Reason}, State) ->
                 true ->
                     true = ets:delete(?BY_DBSIG, DbSig);
                 false ->
-                    NewIndexerRef = nouveau_index_updater:start_monitor(Index),
+                    {_IndexerPid, NewIndexerRef} = spawn_monitor(nouveau_index_updater, update, [Index]),
                     true = ets:insert(?BY_DBSIG, {DbSig, Index, Queue1}),
                     true = ets:insert(?BY_REF, {NewIndexerRef, DbSig})
             end,
