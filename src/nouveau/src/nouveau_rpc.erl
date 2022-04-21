@@ -25,11 +25,18 @@ search(DbName, #index{} = Index0, #query_args{} = QueryArgs) ->
     %% Incorporate the shard name into the record.
     Index1 = Index0#index{dbname = DbName},
 
-    %% skip this when we add stale=ok
-    case nouveau_index_manager:update_index(Index1) of
-        ok ->
-            %% Run the search
-            rexi:reply(nouveau_api:search(index_name(Index1), QueryArgs));
-        {error, Reason} ->
-            rexi:reply({error, Reason})
-    end.
+    %% check if index is up to date
+    case nouveau_index_updater:outdated(Index1) of
+        true ->
+            case nouveau_index_manager:update_index(Index1) of
+                ok ->
+                    ok;
+                {error, Reason} ->
+                    rexi:reply({error, Reason})
+            end;
+        false ->
+            ok
+    end,
+
+    %% Run the search
+    rexi:reply(nouveau_api:search(index_name(Index1), QueryArgs)).

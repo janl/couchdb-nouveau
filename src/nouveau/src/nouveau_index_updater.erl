@@ -29,8 +29,9 @@
 
 outdated(#index{} = Index) ->
     case open_or_create_index(Index) of
-        {ok, CurSeq} ->
-            get_update_seq(Index) > CurSeq;
+        {ok, IndexSeq} ->
+            DbSeq = get_db_seq(Index),
+            DbSeq > IndexSeq;
         {error, Reason} ->
             {error, Reason}
     end.
@@ -96,7 +97,7 @@ load_docs(FDI, {Db, Index, Proc, ChangesDone, TotalChanges}) ->
 
 
 open_or_create_index(#index{} = Index) ->
-    case get_update_seq(Index) of
+    case get_index_seq(Index) of
         {ok, UpdateSeq} ->
             {ok, UpdateSeq};
         {error, {not_found, _}} ->
@@ -110,8 +111,15 @@ open_or_create_index(#index{} = Index) ->
             {error, Reason}
     end.
 
+get_db_seq(#index{} = Index) ->
+    {ok, Db} = couch_db:open_int(Index#index.dbname, []),
+    try
+        couch_db:get_update_seq(Db)
+    after
+        couch_db:close(Db)
+    end.
 
-get_update_seq(#index{} = Index) ->
+get_index_seq(#index{} = Index) ->
     case nouveau_api:index_info(index_name(Index)) of
         {ok, {Fields}} ->
             {ok, couch_util:get_value(<<"update_seq">>, Fields)};
