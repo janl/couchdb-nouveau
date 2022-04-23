@@ -35,7 +35,9 @@ search(DbName, #index{} = Index0, #query_args{} = QueryArgs) ->
                     rexi:reply({error, Reason})
             end;
         false ->
-            ok
+            ok;
+        {error, Reason} ->
+            rexi:reply({error, Reason})
     end,
 
     %% Run the search
