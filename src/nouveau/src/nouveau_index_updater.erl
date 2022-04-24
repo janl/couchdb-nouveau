@@ -138,26 +138,47 @@ convert_fields([], Acc) ->
     Acc;
 
 convert_fields([[Name, Value, Options] | Rest], Acc) when is_binary(Name), is_binary(Value) ->
-    Field = case facet(Options) of
+    StringField =
+        #{
+          "type" => "string",
+          "name" => Name,
+          "value" => Value,
+          "stored" => stored(Options)
+         },
+    case facet(Options) of
         true ->
-            {[
-                {<<"@type">>, <<"string">>},
-                {<<"name">>, Name},
-                {<<"value">>, Value},
-                {<<"stored">>, stored(Options)},
-                {<<"facet">>, true}
-            ]};
+            FacetField =
+                #{
+                  "type" => "sortedsetdv",
+                  "name" => Name,
+                  "value" => Value
+                 },
+            convert_fields(Rest, [StringField, FacetField | Acc]);
         false ->
-            {[
-                {<<"@type">>, <<"text">>},
-                {<<"name">>, Name},
-                {<<"value">>, Value},
-                {<<"stored">>, stored(Options)}
-            ]}
-    end,
-    convert_fields(Rest, [Field | Acc]);
+            convert_fields(Rest, [StringField | Acc])
+    end.
+
 
 convert_fields([[Name, Value, Options] | Rest], Acc) when is_binary(Name), is_number(Value) ->
+    DoublePoint =
+        #{
+          "type" => "double",
+          "name" => Name,
+          "value" => Value
+         },
+    StoredField = case stored(Options) of
+        true ->
+            #{
+              "type" => "stored",
+              "name" => Name,
+              "numeric_value" => Value
+             };
+        false ->
+            nil
+    end,
+
+
+
     Field = {[
         {<<"@type">>, <<"double">>},
         {<<"name">>, Name},
