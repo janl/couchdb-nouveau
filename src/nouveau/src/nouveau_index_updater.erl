@@ -72,6 +72,9 @@ update(#index{} = Index) ->
     end.
 
 
+load_docs(#full_doc_info{id = <<"_design/", _/binary>>}, Acc) ->
+    {ok, Acc};
+
 load_docs(FDI, {Db, Index, Proc, ChangesDone, TotalChanges}) ->
     couch_task_status:update([{changes_done, ChangesDone}, {progress, (ChangesDone * 100) div TotalChanges}]),
 
