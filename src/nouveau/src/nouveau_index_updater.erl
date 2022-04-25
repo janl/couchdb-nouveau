@@ -25,7 +25,7 @@
 -export([update/1]).
 
 -import(couch_query_servers, [get_os_process/1, ret_os_process/1, proc_prompt/2]).
--import(nouveau_util, [index_name/1]).
+-import(nouveau_util, [index_path/1]).
 
 outdated(#index{} = Index) ->
     case open_or_create_index(Index) of
@@ -83,17 +83,17 @@ load_docs(FDI, {Db, Index, Proc, ChangesDone, TotalChanges}) ->
 
     case Del of
         true ->
-            ok = nouveau_api:delete_doc(index_name(Index), Id, Seq);
+            ok = nouveau_api:delete_doc(index_path(Index), Id, Seq);
         false ->
             {ok, Doc} = couch_db:open_doc(Db, DI, []),
             Json = couch_doc:to_json_obj(Doc, []),
             [Fields0 | _] = proc_prompt(Proc, [<<"index_doc">>, Json]),
             case Fields0 of
                 [] ->
-                    ok = nouveau_api:delete_doc(index_name(Index), Id, Seq);
+                    ok = nouveau_api:delete_doc(index_path(Index), Id, Seq);
                 _ ->
                     Fields1 = convert_fields(Fields0),
-                    ok = nouveau_api:update_doc(index_name(Index), Id, Seq, Fields1)
+                    ok = nouveau_api:update_doc(index_path(Index), Id, Seq, Fields1)
            end
     end,
     {ok, {Db, Index, Proc, ChangesDone + 1, TotalChanges}}.
@@ -104,7 +104,7 @@ open_or_create_index(#index{} = Index) ->
         {ok, UpdateSeq} ->
             {ok, UpdateSeq};
         {error, {not_found, _}} ->
-            case nouveau_api:create_index(index_name(Index), index_definition(Index)) of
+            case nouveau_api:create_index(index_path(Index), index_definition(Index)) of
                 ok ->
                     {ok, 0};
                 {error, Reason} ->
@@ -123,7 +123,7 @@ get_db_seq(#index{} = Index) ->
     end.
 
 get_index_seq(#index{} = Index) ->
-    case nouveau_api:index_info(index_name(Index)) of
+    case nouveau_api:index_info(index_path(Index)) of
         {ok, {Fields}} ->
             {ok, couch_util:get_value(<<"update_seq">>, Fields)};
         {error, Reason} ->

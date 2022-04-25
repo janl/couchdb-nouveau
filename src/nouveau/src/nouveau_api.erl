@@ -22,7 +22,7 @@
     analyze/2,
     index_info/1,
     create_index/2,
-    delete_index/1,
+    delete_path/1,
     delete_doc/3,
     update_doc/4,
     search/2
@@ -73,11 +73,11 @@ create_index(IndexName, IndexDefinition)
     end.
 
 
-delete_index(IndexName)
-  when is_binary(IndexName) ->
-    Resp = ibrowse:send_req(index_url(IndexName), [?JSON_CONTENT_TYPE], delete, []),
+delete_path(Path)
+  when is_binary(Path) ->
+    Resp = ibrowse:send_req(index_url(Path), [?JSON_CONTENT_TYPE], delete, []),
     case Resp of
-        {ok, "200", _, _} ->
+        {ok, "204", _, _} ->
             ok;
         {ok, StatusCode, _, RespBody} ->
             {error, jaxrs_error(StatusCode, RespBody)};

@@ -36,6 +36,8 @@
     handle_info/2
 ]).
 
+-export([handle_db_event/3]).
+
 -define(BY_DBSIG, nouveau_by_dbsig).
 -define(BY_REF, nouveau_by_ref).
 
@@ -52,6 +54,7 @@ init(_) ->
     couch_util:set_mqd_off_heap(?MODULE),
     ets:new(?BY_DBSIG, [set, named_table]),
     ets:new(?BY_REF, [set, named_table]),
+    couch_event:link_listener(?MODULE, handle_db_event, nil, [all_dbs]),
     {ok, nil}.
 
 
@@ -105,3 +108,11 @@ handle_info({'DOWN', IndexerRef, process, _Pid, Reason}, State) ->
 
 handle_info(_Msg, State) ->
     {noreply, State}.
+
+handle_db_event(DbName, deleted, State) ->
+    couch_log:notice("Deleting indexes for ~s as database was deleted", [DbName]),
+    nouveau_api:delete_path(nouveau_util:index_path(DbName)),
+    {ok, State};
+
+handle_db_event(_DbName, _Event, State) ->
+    {ok, State}.
