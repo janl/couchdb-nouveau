@@ -19,7 +19,7 @@
 -export([search/3]).
 
 -include("nouveau.hrl").
--import(nouveau_util, [index_name/1]).
+-import(nouveau_util, [index_path/1]).
 
 search(DbName, #index{} = Index0, #query_args{} = QueryArgs) ->
     %% Incorporate the shard name into the record.
@@ -41,4 +41,4 @@ search(DbName, #index{} = Index0, #query_args{} = QueryArgs) ->
     end,
 
     %% Run the search
-    rexi:reply(nouveau_api:search(index_name(Index1), QueryArgs)).
+    rexi:reply(nouveau_api:search(index_path(Index1), QueryArgs)).

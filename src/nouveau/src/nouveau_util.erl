@@ -18,8 +18,13 @@
 
 -include("nouveau.hrl").
 
--export([index_name/1]).
+-export([index_path/1]).
 
-index_name(#index{} = Index) ->
-    NodeBin = atom_to_binary(node(), utf8),
-    <<NodeBin/binary, "/", (Index#index.dbname)/binary, "/", (Index#index.sig)/binary>>.
+index_path(Path) when is_binary(Path) ->
+    <<(node_prefix())/binary, "/", Path/binary>>;
+
+index_path(#index{} = Index) ->
+    <<(node_prefix())/binary, "/", (Index#index.dbname)/binary, "/", (Index#index.sig)/binary>>.
+
+node_prefix() ->
+    atom_to_binary(node(), utf8).
