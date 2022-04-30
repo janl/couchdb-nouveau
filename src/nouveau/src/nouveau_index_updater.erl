@@ -132,40 +132,26 @@ get_index_seq(#index{} = Index) ->
 
 
 convert_fields(Fields) ->
-    lists:reverse(convert_fields(Fields, [])).
+    lists:flatmap(fun convert_field/1, Fields).
 
-convert_fields([], Acc) ->
-    Acc;
+convert_field([Name, Value, Options]) when is_binary(Name), is_binary(Value) ->
 
-convert_fields([[Name, Value, Options] | Rest], Acc) when is_binary(Name), is_binary(Value) ->
-    Field = case facet(Options) of
+    case facet(Options) of
         true ->
-            {[
-                {<<"@type">>, <<"string">>},
-                {<<"name">>, Name},
-                {<<"value">>, Value},
-                {<<"stored">>, stored(Options)},
-                {<<"facet">>, true}
-            ]};
+            [string_field(Name, Value, stored(Options))];
         false ->
-            {[
-                {<<"@type">>, <<"text">>},
-                {<<"name">>, Name},
-                {<<"value">>, Value},
-                {<<"stored">>, stored(Options)}
-            ]}
-    end,
-    convert_fields(Rest, [Field | Acc]);
+            [string_field(Name, Value, stored(Options)), sortedset_dv(Name, Value)]
+    end;
 
-convert_fields([[Name, Value, Options] | Rest], Acc) when is_binary(Name), is_number(Value) ->
-    Field = {[
-        {<<"@type">>, <<"double">>},
-        {<<"name">>, Name},
-        {<<"value">>, Value},
-        {<<"stored">>, stored(Options)},
-        {<<"facet">>, facet(Options)}
-    ]},
-    convert_fields(Rest, [Field | Acc]).
+convert_field([Name, Value, Options]) when is_binary(Name), is_number(Value) ->
+    case {facet(Options), stored(Options)} of
+        {false, false} ->
+            [double_point(Name, Value)];
+        {true, false} ->
+            [double_point(Name, Value), double_dv(Name, Value)];
+        {true, true} ->
+            [double_point(Name, Value), stored_double(Name, Value), double_dv(Name, Value)]
+    end.
 
 
 stored({Options}) ->
@@ -186,6 +172,7 @@ stored({Options}) ->
             false
     end.
 
+
 facet({Options}) ->
     case couch_util:get_value(<<"facet">>, Options) of
         true ->
@@ -195,6 +182,52 @@ facet({Options}) ->
         undefined ->
             false
     end.
+
+
+string_field(Name, Value, Stored) when is_binary(Name), is_binary(Value), is_boolean(Stored) ->
+    {[
+      {<<"@type">>, <<"string">>},
+      {<<"name">>, Name},
+      {<<"value">>, Value},
+      {<<"stored">>, Stored}
+     ]}.
+
+
+double_point(Name, Value) when is_binary(Name), is_number(Value) ->
+    {[
+      {<<"@type">>, <<"double_point">>},
+      {<<"name">>, Name},
+      {<<"value">>, Value}
+     ]}.
+
+
+sortedset_dv(Name, Value) when is_binary(Name), is_binary(Value) ->
+    {[
+      {<<"@type">>, <<"sortedset_dv">>},
+      {<<"name">>, Name},
+      {<<"value">>, Value}
+     ]}.
+
+sorted_dv(Name, Value) when is_binary(Name), is_binary(Value) ->
+    {[
+      {<<"@type">>, <<"sorted_dv">>},
+      {<<"name">>, Name},
+      {<<"value">>, Value}
+     ]}.
+
+stored_double(Name, Value) when is_binary(Name), is_number(Value) ->
+    {[
+      {<<"@type">>, <<"stored_double">>},
+      {<<"name">>, Name},
+      {<<"value">>, Value}
+     ]}.
+
+double_dv(Name, Value) when is_binary(Name), is_number(Value) ->
+    {[
+      {<<"@type">>, <<"double_dv">>},
+      {<<"name">>, Name},
+      {<<"value">>, Value}
+     ]}.
 
 
 %% TODO add clause for the field analyzers
