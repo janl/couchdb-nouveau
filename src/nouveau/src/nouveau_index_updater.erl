@@ -140,7 +140,7 @@ convert_field([Name, Value, Options]) when is_binary(Name), is_binary(Value) ->
         true ->
             [string_field(Name, Value, stored(Options))];
         false ->
-            [string_field(Name, Value, stored(Options)), sortedset_dv(Name, Value)]
+            [string_field(Name, Value, stored(Options)), sorted_set_dv(Name, Value)]
     end;
 
 convert_field([Name, Value, Options]) when is_binary(Name), is_number(Value) ->
@@ -201,9 +201,9 @@ double_point(Name, Value) when is_binary(Name), is_number(Value) ->
      ]}.
 
 
-sortedset_dv(Name, Value) when is_binary(Name), is_binary(Value) ->
+sorted_set_dv(Name, Value) when is_binary(Name), is_binary(Value) ->
     {[
-      {<<"@type">>, <<"sortedset_dv">>},
+      {<<"@type">>, <<"sorted_set_dv">>},
       {<<"name">>, Name},
       {<<"value">>, Value}
      ]}.
