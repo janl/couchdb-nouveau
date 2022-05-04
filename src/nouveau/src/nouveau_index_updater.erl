@@ -205,7 +205,7 @@ sorted_set_dv(Name, Value) when is_binary(Name), is_binary(Value) ->
     {[
       {<<"@type">>, <<"sorted_set_dv">>},
       {<<"name">>, Name},
-      {<<"value">>, Value}
+      {<<"value">>, base64:encode(Value)}
      ]}.
 
 sorted_dv(Name, Value) when is_binary(Name), is_binary(Value) ->
