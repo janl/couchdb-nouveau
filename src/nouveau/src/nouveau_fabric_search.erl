@@ -29,7 +29,7 @@
 }).
 
 go(DbName, DDoc, IndexName, #query_args{} = QueryArgs) ->
-    {ok, Index} = design_doc_to_index(DDoc, IndexName),
+    {ok, Index} = nouveau_util:design_doc_to_index(DbName, DDoc, IndexName),
     Shards = mem3:shards(DbName),
     Workers = fabric_util:submit_jobs(Shards, nouveau_rpc, search, [Index, QueryArgs]),
     Counters = fabric_dict:init(Workers, nil),
@@ -100,37 +100,3 @@ compare_hit({HitA}, {HitB}) ->
     OrderB = couch_util:get_value(<<"order">>, HitB),
     couch_ejson_compare:less(OrderA, OrderB) < 1.
 
-%% copied from dreyfus_index.erl
-design_doc_to_index(#doc{id = Id, body = {Fields}}, IndexName) ->
-    Language = couch_util:get_value(<<"language">>, Fields, <<"javascript">>),
-    {RawIndexes} = couch_util:get_value(<<"indexes">>, Fields, {[]}),
-    InvalidDDocError =
-        {invalid_design_doc, <<"index `", IndexName/binary, "` must have parameter `index`">>},
-    case lists:keyfind(IndexName, 1, RawIndexes) of
-        false ->
-            {error, {not_found, <<IndexName/binary, " not found.">>}};
-        {IndexName, {Index}} ->
-            Analyzer = couch_util:get_value(<<"analyzer">>, Index, <<"standard">>),
-            case couch_util:get_value(<<"index">>, Index) of
-                undefined ->
-                    {error, InvalidDDocError};
-                Def ->
-                    Sig = ?l2b(
-                        couch_util:to_hex(
-                            couch_hash:md5_hash(
-                                term_to_binary({Analyzer, Def})
-                            )
-                        )
-                    ),
-                    {ok, #index{
-                        analyzer = Analyzer,
-                        ddoc_id = Id,
-                        def = Def,
-                        def_lang = Language,
-                        name = IndexName,
-                        sig = Sig
-                    }}
-            end;
-        _ ->
-            {error, InvalidDDocError}
-    end.
