@@ -21,15 +21,3 @@
     name,
     sig=nil
 }).
-
--record(query_args, {
-    query,
-    limit,
-    sort
-}).
-
-
--record(top_docs, {
-    total_hits = 0,
-    hits = []
-}).

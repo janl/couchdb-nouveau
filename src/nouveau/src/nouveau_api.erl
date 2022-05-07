@@ -36,8 +36,8 @@ analyze(Text, Analyzer)
     Resp = ibrowse:send_req(nouveau_url() ++ "/analyze", [?JSON_CONTENT_TYPE], post, jiffy:encode(ReqBody)),
     case Resp of
         {ok, "200", _, RespBody} ->
-            {Fields} = jiffy:decode(RespBody),
-            {ok, couch_util:get_value(<<"tokens">>, Fields)};
+            Json = jiffy:decode(RespBody, [return_maps]),
+            {ok, maps:get(<<"tokens">>, Json)};
         {ok, StatusCode, _, RespBody} ->
             {error, jaxrs_error(StatusCode, RespBody)};
         {error, Reason} ->
@@ -111,17 +111,12 @@ update_doc(IndexName, DocId, UpdateSeq, Fields)
             send_error(Reason)
     end.
 
-search(IndexName, #query_args{} = QueryArgs)
-  when is_binary(IndexName), is_binary(QueryArgs#query_args.query), is_integer(QueryArgs#query_args.limit) ->
-    ReqBody = {[
-        {<<"query">>, QueryArgs#query_args.query},
-        {<<"limit">>, QueryArgs#query_args.limit},
-        {<<"sort">>, QueryArgs#query_args.sort}
-    ]},
-    Resp = ibrowse:send_req(search_url(IndexName), [?JSON_CONTENT_TYPE], post, jiffy:encode(ReqBody)),
+search(IndexName, QueryArgs)
+  when is_binary(IndexName) ->
+    Resp = ibrowse:send_req(search_url(IndexName), [?JSON_CONTENT_TYPE], post, jiffy:encode(QueryArgs)),
     case Resp of
         {ok, "200", _, RespBody} ->
-            {ok, jiffy:decode(RespBody)};
+            {ok, jiffy:decode(RespBody, [return_maps])};
         {ok, StatusCode, _, RespBody} ->
             {error, jaxrs_error(StatusCode, RespBody)};
         {error, Reason} ->
@@ -172,10 +167,10 @@ send_error(Reason) ->
 
 
 message(Body) ->
-    {Fields} = jiffy:decode(Body),
-    couch_util:get_value(<<"message">>, Fields).
+    Json = jiffy:decode(Body, [return_maps]),
+    maps:get(<<"message">>, Json).
 
 
 errors(Body) ->
-    {Fields} = jiffy:decode(Body),
-    couch_util:get_value(<<"errors">>, Fields).
+    Json = jiffy:decode(Body, [return_maps]),
+    maps:get(<<"errors">>, Json).
