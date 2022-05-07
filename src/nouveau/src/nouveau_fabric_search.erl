@@ -83,10 +83,10 @@ handle_message({rexi_DOWN, _, {_, NodeRef}, _}, _Shard, State) ->
             {error, {nodedown, <<"progress not possible">>}}
     end;
 
-handle_message({error, Reason}, _Shard, State) ->
+handle_message({error, Reason}, _Shard, _State) ->
     {error, Reason};
 
-handle_message(Else, _Shard, State) ->
+handle_message(Else, _Shard, _State) ->
     {error, Else}.
 
 
