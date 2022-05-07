@@ -21,7 +21,7 @@
 -include("nouveau.hrl").
 -import(nouveau_util, [index_path/1]).
 
-search(DbName, #index{} = Index0, #query_args{} = QueryArgs) ->
+search(DbName, #index{} = Index0, QueryArgs) ->
     %% Incorporate the shard name into the record.
     Index1 = Index0#index{dbname = DbName},
 

@@ -28,12 +28,13 @@
     top_docs
 }).
 
-go(DbName, DDoc, IndexName, #query_args{} = QueryArgs) ->
+go(DbName, DDoc, IndexName, QueryArgs) ->
     {ok, Index} = nouveau_util:design_doc_to_index(DbName, DDoc, IndexName),
     Shards = mem3:shards(DbName),
     Workers = fabric_util:submit_jobs(Shards, nouveau_rpc, search, [Index, QueryArgs]),
     Counters = fabric_dict:init(Workers, nil),
-    RexiMon = fabric_util:create_monitors(Workers),    State = #state{limit = QueryArgs#query_args.limit, counters = Counters, top_docs = #top_docs{}},
+    RexiMon = fabric_util:create_monitors(Workers),
+    State = #state{limit = maps:get(limit, QueryArgs), counters = Counters, top_docs = #{}},
     try
         rexi_utils:recv(Workers, #shard.ref, fun handle_message/3, State, infinity, 1000 * 60 * 60)
     of
@@ -53,14 +54,13 @@ handle_message({ok, Response}, Shard, State) ->
             %% already heard from someone else in this range
             {ok, State};
         nil ->
-            {Fields} = Response,
-            TotalHits = couch_util:get_value(<<"total_hits">>, Fields),
-            Hits = couch_util:get_value(<<"hits">>, Fields),
+            TotalHits = maps:get(<<"total_hits">>, Response),
+            Hits = maps:get(<<"hits">>, Response),
 
             TopDocs0 = State#state.top_docs,
-            TopDocs1 = TopDocs0#top_docs{
-                total_hits = TotalHits + TopDocs0#top_docs.total_hits,
-                hits = merge_hits(Hits, TopDocs0#top_docs.hits, State#state.limit)
+            TopDocs1 = TopDocs0#{
+                <<"total_hits">> => TotalHits + maps:get(<<"total_hits">>, TopDocs0, 0),
+                <<"hits">> => merge_hits(Hits, maps:get(<<"hits">>, TopDocs0, []), State#state.limit)
             },
 
             Counters1 = fabric_dict:store(Shard, ok, State#state.counters),
@@ -95,8 +95,8 @@ merge_hits(HitsA, HitsB, Limit) ->
     lists:sublist(MergedHits, Limit).
 
 
-compare_hit({HitA}, {HitB}) ->
-    OrderA = couch_util:get_value(<<"order">>, HitA),
-    OrderB = couch_util:get_value(<<"order">>, HitB),
+compare_hit(HitA, HitB) ->
+    OrderA = maps:get(<<"order">>, HitA),
+    OrderB = maps:get(<<"order">>, HitB),
     couch_ejson_compare:less(OrderA, OrderB) < 1.
 
