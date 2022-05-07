@@ -47,12 +47,16 @@ handle_search_req(#httpd{method = 'GET', path_parts = [_, _, _, _, IndexName]} =
     Query = ?l2b(chttpd:qs_value(Req, "q")),
     Limit = list_to_integer(chttpd:qs_value(Req, "limit", "25")),
     Sort = ?JSON_DECODE(chttpd:qs_value(Req, "sort", "null")),
-    QueryArgs = #{query => Query, limit => Limit, sort => Sort},
+    Ranges = ?JSON_DECODE(chttpd:qs_value(Req, "ranges", "null")),
+    Counts = ?JSON_DECODE(chttpd:qs_value(Req, "counts", "null")),
+    QueryArgs = #{query => Query, limit => Limit, sort => Sort, ranges => Ranges, counts => Counts},
     case nouveau_fabric_search:go(DbName, DDoc, IndexName, QueryArgs) of
-        {ok, TopDocs} ->
+        {ok, SearchResults} ->
             RespBody = #{
-                <<"total_hits">> => maps:get(<<"total_hits">>, TopDocs),
-                <<"hits">> => [convert_hit(Hit) || Hit <- maps:get(<<"hits">>, TopDocs)]
+                <<"total_hits">> => maps:get(<<"total_hits">>, SearchResults),
+                <<"hits">> => [convert_hit(Hit) || Hit <- maps:get(<<"hits">>, SearchResults)],
+                <<"counts">> => maps:get(<<"counts">>, SearchResults, null),
+                <<"ranges">> => maps:get(<<"ranges">>, SearchResults, null)
             },
             send_json(Req, 200, RespBody);
         {error, Reason} ->

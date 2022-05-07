@@ -25,7 +25,7 @@
 -record(state, {
     limit,
     counters,
-    top_docs
+    search_results
 }).
 
 go(DbName, DDoc, IndexName, QueryArgs) ->
@@ -34,7 +34,7 @@ go(DbName, DDoc, IndexName, QueryArgs) ->
     Workers = fabric_util:submit_jobs(Shards, nouveau_rpc, search, [Index, QueryArgs]),
     Counters = fabric_dict:init(Workers, nil),
     RexiMon = fabric_util:create_monitors(Workers),
-    State = #state{limit = maps:get(limit, QueryArgs), counters = Counters, top_docs = #{}},
+    State = #state{limit = maps:get(limit, QueryArgs), counters = Counters, search_results = #{}},
     try
         rexi_utils:recv(Workers, #shard.ref, fun handle_message/3, State, infinity, 1000 * 60 * 60)
     of
@@ -54,23 +54,15 @@ handle_message({ok, Response}, Shard, State) ->
             %% already heard from someone else in this range
             {ok, State};
         nil ->
-            TotalHits = maps:get(<<"total_hits">>, Response),
-            Hits = maps:get(<<"hits">>, Response),
-
-            TopDocs0 = State#state.top_docs,
-            TopDocs1 = TopDocs0#{
-                <<"total_hits">> => TotalHits + maps:get(<<"total_hits">>, TopDocs0, 0),
-                <<"hits">> => merge_hits(Hits, maps:get(<<"hits">>, TopDocs0, []), State#state.limit)
-            },
-
+            SearchResults = merge_search_results(State#state.search_results, Response, State),
             Counters1 = fabric_dict:store(Shard, ok, State#state.counters),
             Counters2 = fabric_view:remove_overlapping_shards(Shard, Counters1),
-            State1 = State#state{counters = Counters2, top_docs = TopDocs1},
+            State1 = State#state{counters = Counters2, search_results = SearchResults},
             case fabric_dict:any(nil, Counters2) of
                 true ->
                     {ok, State1};
                 false ->
-                    {stop, TopDocs1}
+                    {stop, SearchResults}
             end
     end;
 
@@ -90,6 +82,15 @@ handle_message(Else, _Shard, _State) ->
     {error, Else}.
 
 
+merge_search_results(A, B, #state{} = State) ->
+    #{
+      <<"total_hits">> => maps:get(<<"total_hits">>, A, 0) + maps:get(<<"total_hits">>, B, 0),
+      <<"hits">> => merge_hits(maps:get(<<"hits">>, A, []), maps:get(<<"hits">>, B, []), State#state.limit),
+      <<"counts">> => merge_facets(maps:get(<<"counts">>, A, null), maps:get(<<"counts">>, B, null), State#state.limit),
+      <<"ranges">> => merge_facets(maps:get(<<"ranges">>, A, null), maps:get(<<"ranges">>, B, null), State#state.limit)
+     }.
+
+
 merge_hits(HitsA, HitsB, Limit) ->
     MergedHits = lists:merge(fun compare_hit/2, HitsA, HitsB),
     lists:sublist(MergedHits, Limit).
@@ -100,3 +101,13 @@ compare_hit(HitA, HitB) ->
     OrderB = maps:get(<<"order">>, HitB),
     couch_ejson_compare:less(OrderA, OrderB) < 1.
 
+
+merge_facets(FacetsA, null, _Limit) ->
+    FacetsA;
+
+merge_facets(null, FacetsB, _Limit) ->
+    FacetsB;
+
+merge_facets(FacetsA, FacetsB, Limit) ->
+    Combiner = fun(_, V1, V2) -> maps:merge_with(fun(_, V3, V4) -> V3 + V4 end, V1, V2) end,
+    maps:merge_with(Combiner, FacetsA, FacetsB).
