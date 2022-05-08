@@ -39,7 +39,7 @@ go(DbName, DDoc, IndexName, QueryArgs) ->
         rexi_utils:recv(Workers, #shard.ref, fun handle_message/3, State, infinity, 1000 * 60 * 60)
     of
         {ok, Result} ->
-            {ok, Result};
+            {ok, add_cursor(DbName, Result)};
         {error, Reason} ->
             {error, Reason}
     after
@@ -99,7 +99,20 @@ merge_hits(HitsA, HitsB, Limit) ->
 compare_hit(HitA, HitB) ->
     OrderA = maps:get(<<"order">>, HitA),
     OrderB = maps:get(<<"order">>, HitB),
-    couch_ejson_compare:less(OrderA, OrderB) < 1.
+    couch_ejson_compare:less(convert_order(OrderA), convert_order(OrderB)) < 1.
+
+
+convert_order(Order) ->
+    [convert_item(Item) || Item <- Order].
+
+
+convert_item(Item) ->
+    case maps:get(<<"type">>, Item) of
+        <<"bytes">> ->
+            base64:decode(maps:get(<<"value">>, Item));
+        _ ->
+            maps:get(<<"value">>, Item)
+    end.
 
 
 merge_facets(FacetsA, null, _Limit) ->
@@ -111,3 +124,12 @@ merge_facets(null, FacetsB, _Limit) ->
 merge_facets(FacetsA, FacetsB, Limit) ->
     Combiner = fun(_, V1, V2) -> maps:merge_with(fun(_, V3, V4) -> V3 + V4 end, V1, V2) end,
     maps:merge_with(Combiner, FacetsA, FacetsB).
+
+%% Form a cursor from the last contribution from each shard range
+add_cursor(DbName, SearchResults) ->
+    Hits = maps:get(<<"hits">>, SearchResults),
+    Cursor = lists:foldl(fun(Hit, Acc) ->
+        [#shard{range = R} | _] = mem3_shards:for_docid(DbName, maps:get(<<"id">>, Hit)),
+        maps:put(R, maps:get(<<"order">>, Hit), Acc)
+    end, #{}, Hits),
+    SearchResults#{cursor => base64:encode(jiffy:encode(maps:values(Cursor)))}.
