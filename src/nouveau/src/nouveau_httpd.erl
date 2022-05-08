@@ -53,6 +53,7 @@ handle_search_req(#httpd{method = 'GET', path_parts = [_, _, _, _, IndexName]} =
     case nouveau_fabric_search:go(DbName, DDoc, IndexName, QueryArgs) of
         {ok, SearchResults} ->
             RespBody = #{
+                <<"cursor">> => maps:get(cursor, SearchResults),
                 <<"total_hits">> => maps:get(<<"total_hits">>, SearchResults),
                 <<"hits">> => [convert_hit(Hit) || Hit <- maps:get(<<"hits">>, SearchResults)],
                 <<"counts">> => maps:get(<<"counts">>, SearchResults, null),
