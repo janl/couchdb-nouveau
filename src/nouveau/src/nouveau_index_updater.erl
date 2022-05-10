@@ -135,11 +135,12 @@ convert_fields(Fields) ->
     lists:flatmap(fun convert_field/1, Fields).
 
 convert_field([Name, Value, Options]) when is_binary(Name), is_binary(Value) ->
-
-    case facet(Options) of
-        true ->
-            [string_field(Name, Value, stored(Options))];
-        false ->
+    case {tokenized(Options), facet(Options)} of
+        {true, _} ->
+            [text_field(Name, Value, stored(Options))];
+        {false, true} ->
+            [string_field(Name, Value, stored(Options)), sorted_dv(Name, Value), sorted_set_dv(Name, Value)];
+        {false, false} ->
             [string_field(Name, Value, stored(Options)), sorted_set_dv(Name, Value)]
     end;
 
@@ -184,9 +185,29 @@ facet({Options}) ->
     end.
 
 
+tokenized({Options}) ->
+    case couch_util:get_value(<<"tokenized">>, Options) of
+        true ->
+            true;
+        false ->
+            false;
+        undefined ->
+            true
+    end.
+
+
 string_field(Name, Value, Stored) when is_binary(Name), is_binary(Value), is_boolean(Stored) ->
     {[
       {<<"@type">>, <<"string">>},
+      {<<"name">>, Name},
+      {<<"value">>, Value},
+      {<<"stored">>, Stored}
+     ]}.
+
+
+text_field(Name, Value, Stored) when is_binary(Name), is_binary(Value), is_boolean(Stored) ->
+    {[
+      {<<"@type">>, <<"text">>},
       {<<"name">>, Name},
       {<<"value">>, Value},
       {<<"stored">>, Stored}
@@ -200,6 +221,13 @@ double_point(Name, Value) when is_binary(Name), is_number(Value) ->
       {<<"value">>, Value}
      ]}.
 
+
+sorted_dv(Name, Value) when is_binary(Name), is_binary(Value) ->
+    {[
+      {<<"@type">>, <<"sorted_dv">>},
+      {<<"name">>, Name},
+      {<<"value">>, base64:encode(Value)}
+     ]}.
 
 sorted_set_dv(Name, Value) when is_binary(Name), is_binary(Value) ->
     {[
