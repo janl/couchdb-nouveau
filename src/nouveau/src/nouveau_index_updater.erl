@@ -141,7 +141,7 @@ convert_field([Name, Value, Options]) when is_binary(Name), is_binary(Value) ->
         {false, true} ->
             [string_field(Name, Value, stored(Options)), sorted_dv(Name, Value), sorted_set_dv(Name, Value)];
         {false, false} ->
-            [string_field(Name, Value, stored(Options)), sorted_set_dv(Name, Value)]
+            [string_field(Name, Value, stored(Options)), sorted_dv(Name, Value)]
     end;
 
 convert_field([Name, Value, Options]) when is_binary(Name), is_number(Value) ->
