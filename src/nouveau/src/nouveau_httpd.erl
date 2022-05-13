@@ -49,7 +49,8 @@ handle_search_req(#httpd{method = 'GET', path_parts = [_, _, _, _, IndexName]} =
     Sort = ?JSON_DECODE(chttpd:qs_value(Req, "sort", "null")),
     Ranges = ?JSON_DECODE(chttpd:qs_value(Req, "ranges", "null")),
     Counts = ?JSON_DECODE(chttpd:qs_value(Req, "counts", "null")),
-    QueryArgs = #{query => Query, limit => Limit, sort => Sort, ranges => Ranges, counts => Counts},
+    Cursor = chttpd:qs_value(Req, "cursor"),
+    QueryArgs = #{query => Query, limit => Limit, sort => Sort, ranges => Ranges, counts => Counts, cursor => Cursor},
     case nouveau_fabric_search:go(DbName, DDoc, IndexName, QueryArgs) of
         {ok, SearchResults} ->
             RespBody = #{
