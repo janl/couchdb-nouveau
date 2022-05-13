@@ -28,18 +28,28 @@
     search_results
 }).
 
-go(DbName, DDoc, IndexName, QueryArgs) ->
+go(DbName, DDoc, IndexName, QueryArgs0) ->
     {ok, Index} = nouveau_util:design_doc_to_index(DbName, DDoc, IndexName),
     Shards = mem3:shards(DbName),
-    Workers = fabric_util:submit_jobs(Shards, nouveau_rpc, search, [Index, QueryArgs]),
-    Counters = fabric_dict:init(Workers, nil),
+    Cursor = unpack_cursor(DbName, maps:get(cursor, QueryArgs0)),
+    QueryArgs1 = maps:remove(cursor, QueryArgs0),
+    Counters0 = lists:map(
+        fun(#shard{} = Shard) ->
+            After = maps:get(Shard#shard.range, Cursor, null),
+            Ref = rexi:cast(Shard#shard.node, {nouveau_rpc, search,
+                [Shard#shard.name, Index, QueryArgs1#{'after' => After}]}),
+            Shard#shard{ref = Ref}
+        end,
+        Shards),
+    Counters = fabric_dict:init(Counters0, nil),
+    Workers = fabric_dict:fetch_keys(Counters),
     RexiMon = fabric_util:create_monitors(Workers),
-    State = #state{limit = maps:get(limit, QueryArgs), counters = Counters, search_results = #{}},
+    State = #state{limit = maps:get(limit, QueryArgs0), counters = Counters, search_results = #{}},
     try
         rexi_utils:recv(Workers, #shard.ref, fun handle_message/3, State, infinity, 1000 * 60 * 60)
     of
         {ok, Result} ->
-            {ok, Result};
+            {ok, add_cursor(DbName, Result)};
         {error, Reason} ->
             {error, Reason}
     after
@@ -99,7 +109,20 @@ merge_hits(HitsA, HitsB, Limit) ->
 compare_hit(HitA, HitB) ->
     OrderA = maps:get(<<"order">>, HitA),
     OrderB = maps:get(<<"order">>, HitB),
-    couch_ejson_compare:less(OrderA, OrderB) < 1.
+    couch_ejson_compare:less(convert_order(OrderA), convert_order(OrderB)) < 1.
+
+
+convert_order(Order) ->
+    [convert_item(Item) || Item <- Order].
+
+
+convert_item(Item) ->
+    case maps:get(<<"type">>, Item) of
+        <<"bytes">> ->
+            base64:decode(maps:get(<<"value">>, Item));
+        _ ->
+            maps:get(<<"value">>, Item)
+    end.
 
 
 merge_facets(FacetsA, null, _Limit) ->
@@ -111,3 +134,26 @@ merge_facets(null, FacetsB, _Limit) ->
 merge_facets(FacetsA, FacetsB, Limit) ->
     Combiner = fun(_, V1, V2) -> maps:merge_with(fun(_, V3, V4) -> V3 + V4 end, V1, V2) end,
     maps:merge_with(Combiner, FacetsA, FacetsB).
+
+%% Form a cursor from the last contribution from each shard range
+add_cursor(DbName, SearchResults) ->
+    Hits = maps:get(<<"hits">>, SearchResults),
+    Cursor = lists:foldl(fun(Hit, Acc) ->
+        maps:put(range_of(DbName, maps:get(<<"id">>, Hit)), maps:get(<<"order">>, Hit), Acc)
+    end, #{}, Hits),
+    SearchResults#{cursor => base64:encode(jiffy:encode(maps:values(Cursor)))}.
+
+range_of(DbName, DocId) when is_binary(DbName), is_binary(DocId) ->
+    [#shard{range = Range} | _] = mem3_shards:for_docid(DbName, DocId),
+    Range;
+
+range_of(DbName, Order) when is_binary(DbName), is_list(Order) ->
+    #{<<"type">> := <<"bytes">>, <<"value">> := EncodedDocId} = lists:last(Order),
+    range_of(DbName, base64:decode(EncodedDocId)).
+
+unpack_cursor(_DbName, undefined) ->
+    #{};
+
+unpack_cursor(DbName, PackedCursor) ->
+    Cursor = jiffy:decode(base64:decode(PackedCursor), [return_maps]),
+    maps:from_list([{range_of(DbName, V), V} || V <- Cursor]).
