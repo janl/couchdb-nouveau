@@ -64,7 +64,8 @@ design_doc_to_index(DbName, #doc{id = Id, body = {Fields}}, IndexName) ->
         false ->
             {error, {not_found, <<IndexName/binary, " not found.">>}};
         {IndexName, {Index}} ->
-            Analyzer = couch_util:get_value(<<"analyzer">>, Index, <<"standard">>),
+            DefaultAnalyzer = couch_util:get_value(<<"default_analyzer">>, Index, <<"standard">>),
+            FieldAnalyzers = couch_util:get_value(<<"field_analyzers">>, Index, #{}),
             case couch_util:get_value(<<"index">>, Index) of
                 undefined ->
                     {error, InvalidDDocError};
@@ -72,13 +73,14 @@ design_doc_to_index(DbName, #doc{id = Id, body = {Fields}}, IndexName) ->
                     Sig = ?l2b(
                         couch_util:to_hex(
                             couch_hash:md5_hash(
-                                term_to_binary({Analyzer, Def})
+                                term_to_binary({DefaultAnalyzer, FieldAnalyzers, Def})
                             )
                         )
                     ),
                     {ok, #index{
                         dbname = DbName,
-                        analyzer = Analyzer,
+                        default_analyzer = DefaultAnalyzer,
+                        field_analyzers = FieldAnalyzers,
                         ddoc_id = Id,
                         def = Def,
                         def_lang = Language,
