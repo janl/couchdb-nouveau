@@ -15,7 +15,8 @@
 -record(index, {
     dbname,
     ddoc_id,
-    analyzer,
+    default_analyzer,
+    field_analyzers,
     def,
     def_lang,
     name,
