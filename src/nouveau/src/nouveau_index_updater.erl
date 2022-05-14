@@ -252,7 +252,8 @@ double_dv(Name, Value) when is_binary(Name), is_number(Value) ->
      ]}.
 
 
-%% TODO add clause for the field analyzers
-index_definition(#index{} = Index)
-  when is_binary(Index#index.analyzer) ->
-    {[{<<"default_analyzer">>, Index#index.analyzer}]}.
+index_definition(#index{} = Index) ->
+    #{
+      <<"default_analyzer">> => Index#index.default_analyzer,
+      <<"field_analyzers">> => Index#index.field_analyzers
+     }.
