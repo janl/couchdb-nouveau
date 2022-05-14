@@ -49,7 +49,7 @@ go(DbName, DDoc, IndexName, QueryArgs0) ->
         rexi_utils:recv(Workers, #shard.ref, fun handle_message/3, State, infinity, 1000 * 60 * 60)
     of
         {ok, Result} ->
-            {ok, add_cursor(DbName, Result)};
+            {ok, update_cursor(DbName, Cursor, Result)};
         {error, Reason} ->
             {error, Reason}
     after
@@ -136,12 +136,13 @@ merge_facets(FacetsA, FacetsB, Limit) ->
     maps:merge_with(Combiner, FacetsA, FacetsB).
 
 %% Form a cursor from the last contribution from each shard range
-add_cursor(DbName, SearchResults) ->
+update_cursor(DbName, PreviousCursor, SearchResults) ->
     Hits = maps:get(<<"hits">>, SearchResults),
-    Cursor = lists:foldl(fun(Hit, Acc) ->
+    NewCursor0 = lists:foldl(fun(Hit, Acc) ->
         maps:put(range_of(DbName, maps:get(<<"id">>, Hit)), maps:get(<<"order">>, Hit), Acc)
     end, #{}, Hits),
-    SearchResults#{cursor => base64:encode(jiffy:encode(maps:values(Cursor)))}.
+    NewCursor1 = maps:merge(PreviousCursor, NewCursor0),
+    SearchResults#{cursor => base64:encode(jiffy:encode(maps:values(NewCursor1)))}.
 
 range_of(DbName, DocId) when is_binary(DbName), is_binary(DocId) ->
     [#shard{range = Range} | _] = mem3_shards:for_docid(DbName, DocId),
