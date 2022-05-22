@@ -24,6 +24,7 @@
 
 -record(state, {
     limit,
+    sort,
     counters,
     search_results
 }).
@@ -44,7 +45,11 @@ go(DbName, DDoc, IndexName, QueryArgs0) ->
     Counters = fabric_dict:init(Counters0, nil),
     Workers = fabric_dict:fetch_keys(Counters),
     RexiMon = fabric_util:create_monitors(Workers),
-    State = #state{limit = maps:get(limit, QueryArgs0), counters = Counters, search_results = #{}},
+    State = #state{
+        limit = maps:get(limit, QueryArgs0),
+        sort = maps:get(sort, QueryArgs0),
+        counters = Counters,
+        search_results = #{}},
     try
         rexi_utils:recv(Workers, #shard.ref, fun handle_message/3, State, infinity, 1000 * 60 * 60)
     of
@@ -95,26 +100,51 @@ handle_message(Else, _Shard, _State) ->
 merge_search_results(A, B, #state{} = State) ->
     #{
       <<"total_hits">> => maps:get(<<"total_hits">>, A, 0) + maps:get(<<"total_hits">>, B, 0),
-      <<"hits">> => merge_hits(maps:get(<<"hits">>, A, []), maps:get(<<"hits">>, B, []), State#state.limit),
+      <<"hits">> => merge_hits(maps:get(<<"hits">>, A, []), maps:get(<<"hits">>, B, []), State#state.sort, State#state.limit),
       <<"counts">> => merge_facets(maps:get(<<"counts">>, A, null), maps:get(<<"counts">>, B, null), State#state.limit),
       <<"ranges">> => merge_facets(maps:get(<<"ranges">>, A, null), maps:get(<<"ranges">>, B, null), State#state.limit)
      }.
 
 
-merge_hits(HitsA, HitsB, Limit) ->
-    MergedHits = lists:merge(fun compare_hit/2, HitsA, HitsB),
+merge_hits(HitsA, HitsB, Sort, Limit) ->
+    MergedHits = lists:merge(merge_fun(Sort), HitsA, HitsB),
     lists:sublist(MergedHits, Limit).
 
+merge_fun(Sort) ->
+    fun(HitA, HitB) ->
+        OrderA = maps:get(<<"order">>, HitA),
+        OrderB = maps:get(<<"order">>, HitB),
+        compare_order(Sort, OrderA, OrderB)
+    end.
 
-compare_hit(HitA, HitB) ->
-    OrderA = maps:get(<<"order">>, HitA),
-    OrderB = maps:get(<<"order">>, HitB),
-    couch_ejson_compare:less(convert_order(OrderA), convert_order(OrderB)) < 1.
 
-
-convert_order(Order) ->
-    [convert_item(Item) || Item <- Order].
-
+%% no sort order specified
+compare_order(null, [A | ARest], [B | BRest]) -> 
+    case couch_ejson_compare:less(convert_item(A), convert_item(B)) of
+        0 ->
+            compare_order(null, ARest, BRest);
+        Less ->
+            Less < 1
+    end;
+%% server-side adds _id on the end of sort order if not present
+compare_order([], [A], [B]) -> 
+    couch_ejson_compare:less(convert_item(A), convert_item(B)) < 1;
+%% reverse order specified
+compare_order([<<"-", _/binary>> | SortRest], [A | ARest], [B | BRest]) -> 
+    case couch_ejson_compare:less(convert_item(B), convert_item(A)) of
+        0 ->
+            compare_order(SortRest, ARest, BRest);
+        Less ->
+            Less < 1
+    end;
+%% forward order specified
+compare_order([_ | SortRest], [A | ARest], [B | BRest]) ->
+    case couch_ejson_compare:less(convert_item(A), convert_item(B)) of
+        0 ->
+            compare_order(SortRest, ARest, BRest);
+        Less ->
+            Less < 1
+    end.
 
 convert_item(Item) ->
     case maps:get(<<"type">>, Item) of
