@@ -18,7 +18,7 @@
 
 -export([url_handler/1, db_handler/1, design_handler/1]).
 
-url_handler(<<"_nsearch_analyze">>) ->
+url_handler(<<"_nouveau_analyze">>) ->
     fun nouveau_httpd:handle_analyze_req/1;
 url_handler(_) ->
     no_match.
@@ -26,9 +26,9 @@ url_handler(_) ->
 db_handler(_) ->
     no_match.
 
-design_handler(<<"_nsearch">>) ->
+design_handler(<<"_nouveau">>) ->
     fun nouveau_httpd:handle_search_req/3;
-design_handler(<<"_nsearch_info">>) ->
+design_handler(<<"_nouveau_info">>) ->
     nomatch;
 design_handler(_) ->
     no_match.
