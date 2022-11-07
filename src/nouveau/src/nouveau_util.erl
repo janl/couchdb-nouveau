@@ -36,7 +36,7 @@ node_prefix() ->
 
 %% copied from dreyfus_index.erl
 design_doc_to_indexes(DbName, #doc{body = {Fields}} = Doc) ->
-    RawIndexes = couch_util:get_value(<<"indexes">>, Fields, {[]}),
+    RawIndexes = couch_util:get_value(<<"nouveau">>, Fields, {[]}),
     case RawIndexes of
         {IndexList} when is_list(IndexList) ->
             {IndexNames, _} = lists:unzip(IndexList),
@@ -57,7 +57,7 @@ design_doc_to_indexes(DbName, #doc{body = {Fields}} = Doc) ->
 %% copied from dreyfus_index.erl
 design_doc_to_index(DbName, #doc{id = Id, body = {Fields}}, IndexName) ->
     Language = couch_util:get_value(<<"language">>, Fields, <<"javascript">>),
-    {RawIndexes} = couch_util:get_value(<<"indexes">>, Fields, {[]}),
+    {RawIndexes} = couch_util:get_value(<<"nouveau">>, Fields, {[]}),
     InvalidDDocError =
         {invalid_design_doc, <<"index `", IndexName/binary, "` must have parameter `index`">>},
     case lists:keyfind(IndexName, 1, RawIndexes) of
