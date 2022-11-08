@@ -87,13 +87,12 @@ load_docs(FDI, {Db, Index, Proc, ChangesDone, TotalChanges}) ->
         false ->
             {ok, Doc} = couch_db:open_doc(Db, DI, []),
             Json = couch_doc:to_json_obj(Doc, []),
-            [Fields0 | _] = proc_prompt(Proc, [<<"index_doc">>, Json]),
-            case Fields0 of
+            [Fields | _] = proc_prompt(Proc, [<<"nouveau_index_doc">>, Json]),
+            case Fields of
                 [] ->
                     ok = nouveau_api:delete_doc(index_path(Index), Id, Seq);
                 _ ->
-                    Fields1 = convert_fields(Fields0),
-                    ok = nouveau_api:update_doc(index_path(Index), Id, Seq, Fields1)
+                    ok = nouveau_api:update_doc(index_path(Index), Id, Seq, Fields)
            end
     end,
     {ok, {Db, Index, Proc, ChangesDone + 1, TotalChanges}}.
@@ -129,128 +128,6 @@ get_index_seq(#index{} = Index) ->
         {error, Reason} ->
             {error, Reason}
     end.
-
-
-convert_fields(Fields) ->
-    lists:flatmap(fun convert_field/1, Fields).
-
-convert_field([Name, Value, Options]) when is_binary(Name), is_binary(Value) ->
-    case {tokenized(Options), facet(Options)} of
-        {true, _} ->
-            [text_field(Name, Value, stored(Options))];
-        {false, true} ->
-            [string_field(Name, Value, stored(Options)), sorted_dv(Name, Value), sorted_set_dv(Name, Value)];
-        {false, false} ->
-            [string_field(Name, Value, stored(Options)), sorted_dv(Name, Value)]
-    end;
-
-convert_field([Name, Value, Options]) when is_binary(Name), is_number(Value) ->
-    case {facet(Options), stored(Options)} of
-        {false, false} ->
-            [double_point(Name, Value)];
-        {true, false} ->
-            [double_point(Name, Value), double_dv(Name, Value)];
-        {true, true} ->
-            [double_point(Name, Value), stored_double(Name, Value), double_dv(Name, Value)]
-    end.
-
-
-stored({Options}) ->
-    case couch_util:get_value(<<"store">>, Options) of
-        true ->
-            true;
-        false ->
-            false;
-        <<"YES">> ->
-            true;
-        <<"yes">> ->
-            true;
-        <<"NO">> ->
-            false;
-        <<"no">> ->
-            false;
-        _ ->
-            false
-    end.
-
-
-facet({Options}) ->
-    case couch_util:get_value(<<"facet">>, Options) of
-        true ->
-            true;
-        false ->
-            false;
-        undefined ->
-            false
-    end.
-
-
-tokenized({Options}) ->
-    case couch_util:get_value(<<"tokenized">>, Options) of
-        true ->
-            true;
-        false ->
-            false;
-        undefined ->
-            true
-    end.
-
-
-string_field(Name, Value, Stored) when is_binary(Name), is_binary(Value), is_boolean(Stored) ->
-    {[
-      {<<"@type">>, <<"string">>},
-      {<<"name">>, Name},
-      {<<"value">>, Value},
-      {<<"stored">>, Stored}
-     ]}.
-
-
-text_field(Name, Value, Stored) when is_binary(Name), is_binary(Value), is_boolean(Stored) ->
-    {[
-      {<<"@type">>, <<"text">>},
-      {<<"name">>, Name},
-      {<<"value">>, Value},
-      {<<"stored">>, Stored}
-     ]}.
-
-
-double_point(Name, Value) when is_binary(Name), is_number(Value) ->
-    {[
-      {<<"@type">>, <<"double_point">>},
-      {<<"name">>, Name},
-      {<<"value">>, Value}
-     ]}.
-
-
-sorted_dv(Name, Value) when is_binary(Name), is_binary(Value) ->
-    {[
-      {<<"@type">>, <<"sorted_dv">>},
-      {<<"name">>, Name},
-      {<<"value">>, base64:encode(Value)}
-     ]}.
-
-sorted_set_dv(Name, Value) when is_binary(Name), is_binary(Value) ->
-    {[
-      {<<"@type">>, <<"sorted_set_dv">>},
-      {<<"name">>, Name},
-      {<<"value">>, base64:encode(Value)}
-     ]}.
-
-
-stored_double(Name, Value) when is_binary(Name), is_number(Value) ->
-    {[
-      {<<"@type">>, <<"stored_double">>},
-      {<<"name">>, Name},
-      {<<"value">>, Value}
-     ]}.
-
-double_dv(Name, Value) when is_binary(Name), is_number(Value) ->
-    {[
-      {<<"@type">>, <<"double_dv">>},
-      {<<"name">>, Name},
-      {<<"value">>, Value}
-     ]}.
-
 
 index_definition(#index{} = Index) ->
     #{
