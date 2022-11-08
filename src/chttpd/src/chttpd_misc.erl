@@ -68,12 +68,9 @@ handle_welcome_req(Req, _) ->
     send_method_not_allowed(Req, "GET,HEAD").
 
 get_features() ->
-    case dreyfus:available() of
-        true ->
-            [search | config:features()];
-        false ->
-            config:features()
-    end.
+    case dreyfus:available() of true -> [search]; false -> [] end ++
+        case nouveau:enabled() of true -> [nouveau]; false -> [] end ++
+        config:features().
 
 handle_favicon_req(Req) ->
     handle_favicon_req(Req, get_docroot()).
