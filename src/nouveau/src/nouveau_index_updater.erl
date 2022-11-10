@@ -60,7 +60,7 @@ update(#index{} = Index) ->
 
                 Proc = get_os_process(Index#index.def_lang),
                 try
-                    true = proc_prompt(Proc, [<<"add_fun">>, Index#index.def]),
+                    true = proc_prompt(Proc, [<<"add_fun">>, Index#index.def], <<"nouveau">>),
                     Acc0 = {Db, Index, Proc, 0, TotalChanges},
                     {ok, _} = couch_db:fold_changes(Db, CurSeq, fun load_docs/2, Acc0, [])
                 after

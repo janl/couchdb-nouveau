@@ -10,7 +10,7 @@
 // License for the specific language governing permissions and limitations under
 // the License.
 
-function create_sandbox() {
+function create_sandbox(sandbox_option) {
   try {
     // if possible, use evalcx (not always available)
     var sandbox = evalcx('');
@@ -25,8 +25,7 @@ function create_sandbox() {
     sandbox.send = Render.send;
     sandbox.getRow = Render.getRow;
     sandbox.isArray = isArray;
-    sandbox.index = Dreyfus.index;
-    sandbox.nouveau_index = Nouveau.nouveau_index;
+    sandbox.index = sandbox_option === 'nouveau'? Nouveau.index : Dreyfus.index;
   } catch (e) {
     var sandbox = {};
   }
